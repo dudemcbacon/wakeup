@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      A pure-Compose app still needs an XML theme for the window itself. Compose
+      draws all the actual UI, so this only sets the background painted before
+      the first frame — which is why it uses a platform parent instead of pulling
+      in AppCompat or Material Components.
+    -->
+    <style name="Theme.Wakeup" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

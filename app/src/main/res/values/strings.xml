@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wakeup</string>
+    <string name="app_description">At the time you choose, this turns Do Not Disturb off, takes the phone out of silent so notifications make sound, and sets the ring, notification, alarm, and media volumes to 75%.</string>
+
+    <string name="label_time">Time</string>
+    <string name="change_time">Change time</string>
+    <string name="pick_time_title">Run at</string>
+
+    <string name="label_repeat">Repeat</string>
+    <string name="repeat_daily">Every day</string>
+    <string name="repeat_weekdays">Weekdays only (Mon–Fri)</string>
+    <string name="repeat_once">Once, then turn off</string>
+
+    <string name="schedule_enabled">Schedule enabled</string>
+    <string name="next_run">Next run: %1$s</string>
+    <string name="schedule_off">Nothing scheduled.</string>
+
+    <string name="label_permissions">Permissions</string>
+    <string name="dnd_granted">✓ Do Not Disturb access granted.</string>
+    <string name="dnd_missing">✕ Do Not Disturb access is required — without it the app cannot turn DND off, and the volume changes will be ignored too.</string>
+    <string name="grant_dnd">Grant Do Not Disturb access</string>
+
+    <string name="alarm_granted">✓ Exact alarms allowed.</string>
+    <string name="alarm_missing">✕ Exact alarms not allowed — the run may be delayed by several minutes.</string>
+    <string name="grant_alarm">Allow exact alarms</string>
+
+    <string name="notifications_granted">✓ Notifications allowed (you\'ll get a confirmation after each run).</string>
+    <string name="notifications_missing">○ Notifications not allowed — the app will still run, just without a confirmation.</string>
+    <string name="grant_notifications">Allow notifications</string>
+
+    <string name="run_now">Run now (test)</string>
+    <string name="last_run">Last run: %1$s</string>
+    <string name="last_run_never">Has not run yet.</string>
+
+    <string name="settings_unavailable">This device has no settings screen for that.</string>
+</resources>

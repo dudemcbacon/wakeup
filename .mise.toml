@@ -1,0 +1,4 @@
+# AGP 9 requires JDK 17+; this machine's global default is JDK 18, which is not
+# a supported AGP toolchain. Pin JDK 21 (LTS) for this project.
+[tools]
+java = "temurin-21.0.7+6.0.LTS"
