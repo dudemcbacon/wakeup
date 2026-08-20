@@ -20,6 +20,9 @@ jobs:
     name: Assemble and lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      signed: ${{ steps.keystore.outputs.available }}
 
     steps:
       - name: Check out
@@ -52,8 +55,64 @@ jobs:
         with:
           packages: 'platforms;android-37.0 build-tools;37.0.0'
 
+      - name: Derive version
+        id: version
+        run: echo "version=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      # Secrets are unavailable to pull requests from forks, so a missing
+      # keystore is a warning rather than a failure: the release build stays
+      # unsigned and the publish job is skipped.
+      - name: Decode release keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::RELEASE_KEYSTORE_BASE64 is not set — the release APK will be unsigned and no GitHub release will be published.'
+          else
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      # When the signing variables are absent or incomplete, app/build.gradle.kts
+      # falls back to an unsigned release build rather than failing.
       - name: Assemble and lint
-        run: ./gradlew assembleDebug assembleRelease lintDebug --stacktrace
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/release.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleDebug assembleRelease lintDebug \
+            "-PappVersionCode=${{ github.run_number }}" \
+            "-PappVersionName=${{ steps.version.outputs.version }}" \
+            --stacktrace
+
+      # A signed build produces app-release.apk; an unsigned one produces
+      # app-release-unsigned.apk. Assert the signed name and give it a
+      # human-friendly filename for the release page.
+      - name: Stage signed APK
+        if: ${{ steps.keystore.outputs.available == 'true' }}
+        run: |
+          set -euo pipefail
+          src=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$src" ]; then
+            echo "::error::expected a signed $src but it does not exist"
+            ls -l app/build/outputs/apk/release/
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$src" "dist/wakeup-${{ steps.version.outputs.version }}.apk"
+
+      - name: Upload signed release APK
+        if: ${{ steps.keystore.outputs.available == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-release
+          path: dist/*.apk
+          if-no-files-found: error
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
@@ -73,3 +132,52 @@ jobs:
             app/build/reports/lint-results-debug.html
             app/build/reports/lint-results-debug.xml
           if-no-files-found: warn
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    # Only for real pushes to main, and only when the APK was actually signed.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download signed APK
+        uses: actions/download-artifact@v8
+        with:
+          name: app-release
+          path: dist
+
+      # gh is preinstalled on GitHub-hosted runners; GH_REPO means no checkout
+      # is needed just to give it repository context.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(dist/*.apk)
+          if [ ${#apks[@]} -ne 1 ]; then
+            echo "::error::expected exactly one APK in dist/, found ${#apks[@]}"
+            ls -l dist/ || true
+            exit 1
+          fi
+          apk="${apks[0]}"
+          # Defence in depth: never publish an APK nobody can install.
+          case "$apk" in
+            *unsigned*)
+              echo "::error::refusing to publish an unsigned APK: $apk"
+              exit 1
+              ;;
+          esac
+          gh release create "v${VERSION}" "$apk" \
+            --title "v${VERSION}" \
+            --target "$GITHUB_SHA" \
+            --generate-notes

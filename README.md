@@ -157,6 +157,73 @@ Two things that are easy to get wrong on a runner:
 Wrapper-jar checksum validation is on by default in `gradle/actions/setup-gradle`,
 so a tampered or hand-copied `gradle-wrapper.jar` will fail the build.
 
+### Releases
+
+Every push to `main` publishes a GitHub release tagged `v1.0.<run_number>`,
+carrying a single signed APK named `wakeup-<version>.apk`. The run number also
+becomes the APK's `versionCode`, so each release is upgradable over the last.
+
+The publish job is separate, runs `needs: build`, and holds the only
+`contents: write` permission in the workflow. It is skipped for pull requests
+and for pushes where signing did not happen.
+
+**An unsigned APK cannot be installed**, so the workflow refuses to publish one:
+the signed build produces `app-release.apk` while an unsigned one produces
+`app-release-unsigned.apk`, and both the staging step and the publish step check
+for this. Without the secrets below, the build still succeeds (with a warning)
+and simply publishes nothing.
+
+#### One-time signing setup
+
+Generate a keystore and **back it up somewhere safe** — losing it means you can
+never ship an update to an existing install, only a fresh install under a new
+key.
+
+```bash
+keytool -genkeypair -v -keystore release.jks -alias wakeup \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Add four repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `RELEASE_KEYSTORE_BASE64` | the keystore, base64-encoded (below) |
+| `RELEASE_STORE_PASSWORD` | keystore password |
+| `RELEASE_KEY_ALIAS` | `wakeup` |
+| `RELEASE_KEY_PASSWORD` | key password |
+
+To encode the keystore. Note that macOS `base64` has no `-w` flag, so strip
+newlines with `tr` instead of using the GNU-only `-w0`:
+
+```bash
+base64 -i release.jks | tr -d '\n' | pbcopy
+```
+
+Keep `release.jks` out of the repo — `*.jks` and `keystore.properties` are
+gitignored.
+
+#### Signing a release build locally
+
+Either export the same four names as environment variables
+(`RELEASE_STORE_FILE` is a path, not base64), or create an untracked
+`keystore.properties` in the project root:
+
+```properties
+storeFile=/absolute/path/to/release.jks
+storePassword=…
+keyAlias=wakeup
+keyPassword=…
+```
+
+Then `./gradlew assembleRelease` produces a signed `app-release.apk`. Verify it
+with:
+
+```bash
+$ANDROID_HOME/build-tools/37.0.0/apksigner verify --print-certs \
+  app/build/outputs/apk/release/app-release.apk
+```
+
 ### On the emulator
 
 An API 37 AVD named `wakeup37` (Pixel 7, arm64) is already created:
