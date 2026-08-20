@@ -138,6 +138,25 @@ leave the screen. To watch it fire:
 adb logcat -s WakeupActions:I Scheduler:I WakeupReceiver:I
 ```
 
+### CI
+
+`.github/workflows/build.yml` runs `assembleDebug assembleRelease lintDebug` on
+push and PR to `main`, plus `workflow_dispatch`, and uploads the debug APK and
+the lint report (the report uploads even on failure, which is when it matters).
+
+Two things that are easy to get wrong on a runner:
+
+- **The SDK platform must be `platforms;android-37.0`.** API 37 uses the
+  minor-version naming scheme; a plain `platforms;android-37` does not exist and
+  fails to resolve. `compileSdk = 37` still maps to it correctly.
+- **There is no `local.properties` on CI** — it is gitignored, by design. Gradle
+  finds the SDK through `ANDROID_HOME`/`ANDROID_SDK_ROOT`, which
+  `android-actions/setup-android` sets. Verified locally by building with
+  `local.properties` moved aside.
+
+Wrapper-jar checksum validation is on by default in `gradle/actions/setup-gradle`,
+so a tampered or hand-copied `gradle-wrapper.jar` will fail the build.
+
 ### On the emulator
 
 An API 37 AVD named `wakeup37` (Pixel 7, arm64) is already created:
